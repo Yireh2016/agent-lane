@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { MemoryRepository } from './memory-repository.js';
+import type { Severity } from './repository.js';
 
 const KEY = 'test-key';
 const auth = { 'x-api-key': KEY };
@@ -100,5 +101,71 @@ describe('api', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().scanId).toBe(latest.id);
     expect(res.json().findings.map((f: { checkId: string }) => f.checkId)).toEqual(['headers.missing_hsts']);
+  });
+
+  describe('GET /domains/:id/grade', () => {
+    const addFinding = (scanId: number, severity: Severity) =>
+      repo.findings.push({
+        id: repo.findings.length + 1,
+        scanId,
+        checkId: `test.${severity}`,
+        severity,
+        title: severity,
+        detail: {},
+      });
+
+    it('should grade the latest completed scan and ignore older or unfinished ones', async () => {
+      await repo.createDomain('example.com', 443);
+      const old = await repo.createScan(1);
+      old.status = 'done';
+      addFinding(old.id, 'critical');
+      const latest = await repo.createScan(1);
+      latest.status = 'done';
+      addFinding(latest.id, 'low');
+      addFinding(latest.id, 'medium');
+      const running = await repo.createScan(1);
+      running.status = 'running';
+      addFinding(running.id, 'high');
+      const res = await app.inject({ method: 'GET', url: '/domains/1/grade', headers: auth });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ domainId: 1, scanId: latest.id, grade: 'C' });
+    });
+
+    it('should grade A for a completed scan with no findings', async () => {
+      await repo.createDomain('example.com', 443);
+      const scan = await repo.createScan(1);
+      scan.status = 'done';
+      const res = await app.inject({ method: 'GET', url: '/domains/1/grade', headers: auth });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ domainId: 1, scanId: scan.id, grade: 'A' });
+    });
+
+    it('should 404 with an error for an unknown domain or one without a completed scan', async () => {
+      await repo.createDomain('example.com', 443);
+      const failed = await repo.createScan(1);
+      failed.status = 'failed';
+      await repo.createScan(1);
+      const unknown = await app.inject({ method: 'GET', url: '/domains/99/grade', headers: auth });
+      const invalid = await app.inject({ method: 'GET', url: '/domains/abc/grade', headers: auth });
+      const noScan = await app.inject({ method: 'GET', url: '/domains/1/grade', headers: auth });
+      for (const res of [unknown, invalid, noScan]) {
+        expect(res.statusCode).toBe(404);
+        expect(typeof res.json().error).toBe('string');
+      }
+    });
+
+    it('should require the API key', async () => {
+      await repo.createDomain('example.com', 443);
+      const scan = await repo.createScan(1);
+      scan.status = 'done';
+      const missing = await app.inject({ method: 'GET', url: '/domains/1/grade' });
+      const wrong = await app.inject({
+        method: 'GET',
+        url: '/domains/1/grade',
+        headers: { 'x-api-key': 'nope' },
+      });
+      expect(missing.statusCode).toBe(401);
+      expect(wrong.statusCode).toBe(401);
+    });
   });
 });
