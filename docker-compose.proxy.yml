@@ -1,0 +1,21 @@
+# Only for environments behind an HTTPS-intercepting proxy (e.g. Claude Code cloud
+# sessions). scripts/stack.sh applies it when LANE_PROXY_CA points at a CA bundle.
+services:
+  certs:
+    build: &proxied-go
+      context: ./services/worker
+      network: host
+      args: { HTTPS_PROXY: "${HTTPS_PROXY:-${https_proxy:-}}", HTTP_PROXY: "${HTTP_PROXY:-${http_proxy:-}}" }
+      secrets: [proxy_ca]
+  worker:
+    build: *proxied-go
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+      network: host
+      args: { HTTPS_PROXY: "${HTTPS_PROXY:-${https_proxy:-}}", HTTP_PROXY: "${HTTP_PROXY:-${http_proxy:-}}" }
+      secrets: [proxy_ca]
+secrets:
+  proxy_ca:
+    file: ${LANE_PROXY_CA:-/dev/null}

@@ -1,0 +1,82 @@
+# Local e2e stack. Everything except the API sits on an internal network with no
+# route to the internet, so a scan (or an agent's test run) can only reach the
+# local test sites.
+name: agent-lane
+
+networks:
+  lane:
+    internal: true
+  edge: {}
+
+volumes:
+  certs: {}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lane
+      POSTGRES_PASSWORD: lane-local-only
+      POSTGRES_DB: lane
+    volumes:
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks: [lane]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lane -d lane"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  certs:
+    build: ./services/worker
+    entrypoint: ["/usr/local/bin/gencerts", "-out", "/certs"]
+    user: "0"
+    volumes: [certs:/certs]
+    network_mode: none
+
+  badsite:
+    image: nginx:1.27-alpine
+    volumes:
+      - certs:/certs:ro
+      - ./testsites/bad.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [lane]
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  goodsite:
+    image: nginx:1.27-alpine
+    volumes:
+      - certs:/certs:ro
+      - ./testsites/good.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [lane]
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  worker:
+    build: ./services/worker
+    environment:
+      DATABASE_URL: postgres://lane:lane-local-only@db:5432/lane
+      EXTRA_CA_FILE: /certs/ca.pem
+    volumes: [certs:/certs:ro]
+    networks: [lane]
+    depends_on:
+      db: { condition: service_healthy }
+      certs: { condition: service_completed_successfully }
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://lane:lane-local-only@db:5432/lane
+      API_KEY: ${LANE_API_KEY:-local-dev-key}
+      PORT: "8080"
+    ports: ["127.0.0.1:${LANE_API_PORT:-8080}:8080"]
+    networks: [lane, edge]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

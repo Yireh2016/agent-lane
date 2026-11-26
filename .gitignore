@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.lane/runs/
+*.log
+.env
+.claude-lane-qa/

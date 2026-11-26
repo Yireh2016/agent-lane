@@ -1,0 +1,20 @@
+{
+  "name": "agent-lane",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @agent-lane/api test",
+    "test:go": "cd services/worker && go vet ./... && go test ./...",
+    "test:gates": "node --test tools/gates/check.test.mjs",
+    "stack": "bash scripts/stack.sh",
+    "e2e": "pnpm --filter @agent-lane/e2e test",
+    "gates": "node tools/gates/check.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:go && pnpm test:gates"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.4",
+    "typescript": "5.9.3"
+  }
+}
