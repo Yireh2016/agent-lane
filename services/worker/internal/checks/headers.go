@@ -96,5 +96,56 @@ func CheckHeaders(ctx context.Context, host string, port int, opts HeaderOptions
 			Detail:   map[string]any{"header": rule.header, "url": url},
 		})
 	}
+	if hsts := resp.Header.Get("Strict-Transport-Security"); hsts != "" {
+		if f, weak := weakHSTS(hsts, url); weak {
+			findings = append(findings, f)
+		}
+	}
 	return findings, nil
+}
+
+const minHSTSMaxAge = 15552000
+
+func weakHSTS(value, url string) (Finding, bool) {
+	maxAge, ok := hstsMaxAge(value)
+	if ok && maxAge >= minHSTSMaxAge {
+		return Finding{}, false
+	}
+	var detailAge any
+	if ok {
+		detailAge = maxAge
+	}
+	return Finding{
+		CheckID:  "headers.weak_hsts",
+		Severity: SeverityLow,
+		Title:    "Strict-Transport-Security max-age is shorter than 180 days",
+		Detail: map[string]any{
+			"header":    "Strict-Transport-Security",
+			"url":       url,
+			"value":     value,
+			"maxAge":    detailAge,
+			"minMaxAge": int64(minHSTSMaxAge),
+		},
+	}, true
+}
+
+// Reason: only the first max-age directive counts; if it does not hold a
+// non-negative integer the header has no usable max-age.
+func hstsMaxAge(value string) (int64, bool) {
+	for _, directive := range strings.Split(value, ";") {
+		name, raw, _ := strings.Cut(directive, "=")
+		if !strings.EqualFold(strings.TrimSpace(name), "max-age") {
+			continue
+		}
+		raw = strings.TrimSpace(raw)
+		if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+			raw = raw[1 : len(raw)-1]
+		}
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || n < 0 {
+			return 0, false
+		}
+		return n, true
+	}
+	return 0, false
 }
