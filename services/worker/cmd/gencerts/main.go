@@ -1,5 +1,5 @@
 // gencerts writes the certificates the local test sites serve:
-// a local CA, a valid leaf for goodsite, and an expired self-signed leaf for badsite.
+// a local CA, valid leaves for goodsite and legacysite, and an expired self-signed leaf for badsite.
 package main
 
 import (
@@ -21,6 +21,8 @@ func main() {
 	must(err)
 	good, err := certgen.Leaf([]string{"goodsite"}, now.Add(-time.Hour), now.AddDate(0, 6, 0), ca.Cert, caKey)
 	must(err)
+	legacy, err := certgen.Leaf([]string{"legacysite"}, now.Add(-time.Hour), now.AddDate(0, 6, 0), ca.Cert, caKey)
+	must(err)
 	bad, err := certgen.Leaf([]string{"badsite"}, now.AddDate(-2, 0, 0), now.AddDate(-1, 0, 0), nil, nil)
 	must(err)
 
@@ -28,6 +30,8 @@ func main() {
 	write(*out, "ca.pem", ca.CertPEM)
 	write(*out, "goodsite.pem", good.CertPEM)
 	write(*out, "goodsite.key", good.KeyPEM)
+	write(*out, "legacysite.pem", legacy.CertPEM)
+	write(*out, "legacysite.key", legacy.KeyPEM)
 	write(*out, "badsite.pem", bad.CertPEM)
 	write(*out, "badsite.key", bad.KeyPEM)
 	log.Printf("wrote certificates to %s", *out)
