@@ -70,6 +70,7 @@ func runJob(ctx context.Context, log *slog.Logger, st *store.Store, job store.Jo
 		return
 	}
 	findings := append(tlsFindings, headerFindings...)
+	findings = append(findings, checks.CheckLegacyProtocols(jobCtx, job.Hostname, job.Port, checks.LegacyOptions{})...)
 	if err := st.Complete(ctx, job, findings); err != nil {
 		log.Error("record findings", "err", err)
 		return
