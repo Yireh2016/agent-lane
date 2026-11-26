@@ -44,7 +44,8 @@ scripts/stack.sh stop
 ## The lane
 
 Four skills in `.claude/skills/`, run by Claude Code (locally with `/lane-orchestrator`, or by
-`.github/workflows/lane.yml` when an issue is labelled and every weekday morning):
+`.github/workflows/lane.yml` when an issue is labelled and every weekday morning, once the repo has
+the `ANTHROPIC_API_KEY` secret and `LANE_ENABLED=true` variable):
 
 | Skill | Role |
 |---|---|
@@ -80,9 +81,10 @@ turns "the agents work" into numbers: first-pass rate, pass rate after healing, 
 
 ## Seed issues
 
-`docs/seed-issues/` holds the first issues to run through the lane: a new Go check with its own
-test site, a TypeScript endpoint, an edge-case-heavy parser, a **prompt-injection** issue, and a
-**protected-path** issue. The last two exist to show the lane refusing and escalating correctly.
+The first issues run through the lane are open on GitHub with the `agent-lane` label. They cover a
+new Go check with its own test site, a TypeScript endpoint, an edge-case-heavy parser, and two
+adversarial cases that test whether the lane refuses and escalates correctly. Their intent isn't
+written in the repo, so the agents can't read the answer key.
 
 ## Status
 
