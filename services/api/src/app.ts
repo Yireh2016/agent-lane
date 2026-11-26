@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { apiKeyGuard } from './auth.js';
+import { gradeFor } from './grade.js';
 import { normalizeHostname } from './hostname.js';
 import type { Repository } from './repository.js';
 
@@ -64,6 +65,16 @@ export function buildApp({ repo, apiKey, logger = false }: AppOptions) {
       if (!scan) return reply.code(404).send({ error: 'no completed scan for this domain' });
       const findings = await repo.findingsForScan(scan.id);
       return { domainId: domain.id, scanId: scan.id, findings };
+    });
+
+    api.get('/domains/:id/grade', async (req, reply) => {
+      const id = parseId((req.params as { id: string }).id);
+      const domain = id ? await repo.getDomain(id) : null;
+      if (!domain) return reply.code(404).send({ error: 'domain not found' });
+      const scan = await repo.latestDoneScan(domain.id);
+      if (!scan) return reply.code(404).send({ error: 'no completed scan for this domain' });
+      const findings = await repo.findingsForScan(scan.id);
+      return { domainId: domain.id, scanId: scan.id, grade: gradeFor(findings) };
     });
   });
 
